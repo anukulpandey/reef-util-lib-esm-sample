@@ -6,17 +6,27 @@
     <title>Fetch Accounts from util-lib</title>
 </head>
 <body>
+    <div id="selected-account">Selected Account: None</div>
     <h1>Accounts</h1>
     <div id="status">Fetching accounts...</div>
     <ul id="accounts"></ul>
+    <button id="flipper-button" disabled>Flipper</button> <!-- Flipper button -->
 
     <script type="module">
         import * as utilLib from 'https://cdn.jsdelivr.net/npm/@reef-chain/util-lib@3.0.0/+esm';
+        import { Contract } from 'https://cdn.jsdelivr.net/npm/ethers@5.0.7/+esm';
+        import { Signer } from 'https://cdn.jsdelivr.net/npm/@reef-chain/evm-provider@4.0.3/+esm';
+
+        let selectedAccountDetails = null;
+        let signer = null;
+
+        const flipperButton = document.getElementById("flipper-button");
 
         const fetchExtensions = async () => {
             // Intentional delay of 3 seconds
             await new Promise((resolve) => setTimeout(resolve, 3000));
 
+            // Enable extensions
             let extensions = await utilLib.extension.web3Enable('fetch-accounts-sample-app', undefined, false);
 
             const extension = extensions.find((ext) => ext.name === "reef");
@@ -26,6 +36,7 @@
                 return;
             }
 
+            // Fetch accounts from the connected extension
             const accounts = await extension.accounts.get();
             if (accounts.length === 0) {
                 document.getElementById("status").innerText = "No accounts found!";
@@ -36,11 +47,90 @@
             document.getElementById("status").innerText = "";
 
             accounts.forEach((account) => {
-                console.log("account===",account)
                 const listItem = document.createElement("li");
-                listItem.innerText = `${account.name || "Unnamed Account"} - ${account.address}`;
+
+                // Account details
+                const accountDetails = document.createElement("span");
+                accountDetails.innerText = `${account.name || "Unnamed Account"} - ${account.address}`;
+                
+                // Select button
+                const selectButton = document.createElement("button");
+                selectButton.innerText = "Select";
+                selectButton.style.marginLeft = "10px";
+                selectButton.onclick = async () => {
+                    // Set selected account
+                    utilLib.reefState.setSelectedAddress(account.address);
+
+                    // Update the selected account details
+                    selectedAccountDetails = account;
+                    updateSelectedAccountDisplay(account);
+
+                    // Create a signer for the selected account
+                    utilLib.reefState.selectedProvider$.subscribe((provider) => {
+                        signer = new Signer(provider, account.address, extension.signer);
+                        flipperButton.disabled = false; // Enable Flipper button
+                    });
+
+                    console.log("Selected Account Details:", selectedAccountDetails);
+                    console.log("Signer:", signer);
+                };
+
+                listItem.appendChild(accountDetails);
+                listItem.appendChild(selectButton);
                 accountsList.appendChild(listItem);
             });
+
+            // Parse accounts into the required format for reef state initialization
+            const accountsWithMeta = accounts.map((acc) => ({
+                address: acc.address,
+                meta: {
+                    genesisHash: acc.genesisHash,
+                    name: acc.name && acc.name.length > 0 ? acc.name : extension.name,
+                    source: extension.name,
+                },
+                type: acc.type,
+            }));
+
+            // Initialize reef state
+            utilLib.reefState.initReefState({
+                network: utilLib.network.AVAILABLE_NETWORKS.testnet,
+                jsonAccounts: {
+                    accounts: accountsWithMeta,
+                    injectedSigner: extension.reefSigner,
+                },
+            });
+
+            console.log(utilLib.reefState);
+
+            // Set the first account as the default selected account
+            utilLib.reefState.setSelectedAddress(accounts[0].address);
+            selectedAccountDetails = accounts[0];
+            updateSelectedAccountDisplay(accounts[0]);
+        };
+
+        const updateSelectedAccountDisplay = (account) => {
+            const selectedAccountDiv = document.getElementById("selected-account");
+            selectedAccountDiv.innerText = `Selected Account: ${account.name || "Unnamed Account"} - ${account.address}`;
+        };
+
+        // Add Flipper button click handler
+        flipperButton.onclick = () => {
+            if (!signer) {
+                console.error("Signer is not initialized!");
+                return;
+            }
+
+            const contract = new Contract(
+                "0x7320eccB364F7808ba53af575725397bce5eCBe7",
+                [
+                    {"type":"constructor","inputs":[{"name":"initvalue","type":"bool","internalType":"bool"}],"stateMutability":"nonpayable"},
+                    {"name":"flip","type":"function","inputs":[],"outputs":[],"stateMutability":"nonpayable"},
+                    {"name":"get","type":"function","inputs":[],"outputs":[{"name":"","type":"bool","internalType":"bool"}],"stateMutability":"view"}
+                ],
+                signer
+            );
+
+            console.log("Contract Instance:", contract);
         };
 
         fetchExtensions();
