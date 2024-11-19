@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fetch Accounts from util-lib</title>
+    <title>Fetch Accounts and Interact with Flipper</title>
 </head>
 <body>
     <div id="selected-account">Selected Account: None</div>
     <h1>Accounts</h1>
     <div id="status">Fetching accounts...</div>
     <ul id="accounts"></ul>
-    <button id="flipper-button" disabled>Flipper</button> <!-- Flipper button -->
+
+    <h2>Flipper Value: <span id="flipper-value">N/A</span></h2> 
+    <button id="flip-button" disabled>Flip</button>
 
     <script type="module">
         import * as utilLib from 'https://cdn.jsdelivr.net/npm/@reef-chain/util-lib@3.0.0/+esm';
@@ -20,15 +22,13 @@
         let selectedAccountDetails = null;
         let signer = null;
 
-        const flipperButton = document.getElementById("flipper-button");
+        const flipButton = document.getElementById("flip-button");
+        const flipperValueDisplay = document.getElementById("flipper-value");
 
         const fetchExtensions = async () => {
-            // Intentional delay of 3 seconds
             await new Promise((resolve) => setTimeout(resolve, 3000));
 
-            // Enable extensions
             let extensions = await utilLib.extension.web3Enable('fetch-accounts-sample-app', undefined, false);
-
             const extension = extensions.find((ext) => ext.name === "reef");
 
             if (!extension) {
@@ -36,7 +36,6 @@
                 return;
             }
 
-            // Fetch accounts from the connected extension
             const accounts = await extension.accounts.get();
             if (accounts.length === 0) {
                 document.getElementById("status").innerText = "No accounts found!";
@@ -49,26 +48,22 @@
             accounts.forEach((account) => {
                 const listItem = document.createElement("li");
 
-                // Account details
                 const accountDetails = document.createElement("span");
                 accountDetails.innerText = `${account.name || "Unnamed Account"} - ${account.address}`;
                 
-                // Select button
                 const selectButton = document.createElement("button");
                 selectButton.innerText = "Select";
                 selectButton.style.marginLeft = "10px";
                 selectButton.onclick = async () => {
-                    // Set selected account
                     utilLib.reefState.setSelectedAddress(account.address);
 
-                    // Update the selected account details
                     selectedAccountDetails = account;
                     updateSelectedAccountDisplay(account);
 
-                    // Create a signer for the selected account
                     utilLib.reefState.selectedProvider$.subscribe((provider) => {
                         signer = new Signer(provider, account.address, extension.signer);
-                        flipperButton.disabled = false; // Enable Flipper button
+                        flipButton.disabled = false;
+                        fetchFlipperValue(); // Fetch Flipper value on account selection
                     });
 
                     console.log("Selected Account Details:", selectedAccountDetails);
@@ -80,7 +75,6 @@
                 accountsList.appendChild(listItem);
             });
 
-            // Parse accounts into the required format for reef state initialization
             const accountsWithMeta = accounts.map((acc) => ({
                 address: acc.address,
                 meta: {
@@ -91,7 +85,6 @@
                 type: acc.type,
             }));
 
-            // Initialize reef state
             utilLib.reefState.initReefState({
                 network: utilLib.network.AVAILABLE_NETWORKS.testnet,
                 jsonAccounts: {
@@ -102,10 +95,17 @@
 
             console.log(utilLib.reefState);
 
-            // Set the first account as the default selected account
-            utilLib.reefState.setSelectedAddress(accounts[0].address);
-            selectedAccountDetails = accounts[0];
-            updateSelectedAccountDisplay(accounts[0]);
+            const defaultAccount = accounts[0];
+            utilLib.reefState.setSelectedAddress(defaultAccount.address);
+            selectedAccountDetails = defaultAccount;
+            updateSelectedAccountDisplay(defaultAccount);
+
+            utilLib.reefState.selectedProvider$.subscribe((provider) => {
+                signer = new Signer(provider, defaultAccount.address, extension.signer);
+                flipButton.disabled = false;
+                fetchFlipperValue(); // Fetch Flipper value on initialization
+                console.log("Default Signer Set:", signer);
+            });
         };
 
         const updateSelectedAccountDisplay = (account) => {
@@ -113,8 +113,7 @@
             selectedAccountDiv.innerText = `Selected Account: ${account.name || "Unnamed Account"} - ${account.address}`;
         };
 
-        // Add Flipper button click handler
-        flipperButton.onclick = () => {
+        const fetchFlipperValue = async () => {
             if (!signer) {
                 console.error("Signer is not initialized!");
                 return;
@@ -130,7 +129,38 @@
                 signer
             );
 
-            console.log("Contract Instance:", contract);
+            try {
+                const value = await contract.get();
+                flipperValueDisplay.innerText = value.toString();
+                console.log("Flipper Value Fetched:", value);
+            } catch (error) {
+                console.error("Error fetching Flipper value:", error);
+            }
+        };
+
+        flipButton.onclick = async () => {
+            if (!signer) {
+                console.error("Signer is not initialized!");
+                return;
+            }
+
+            const contract = new Contract(
+                "0x7320eccB364F7808ba53af575725397bce5eCBe7",
+                [
+                    {"type":"constructor","inputs":[{"name":"initvalue","type":"bool","internalType":"bool"}],"stateMutability":"nonpayable"},
+                    {"name":"flip","type":"function","inputs":[],"outputs":[],"stateMutability":"nonpayable"},
+                    {"name":"get","type":"function","inputs":[],"outputs":[{"name":"","type":"bool","internalType":"bool"}],"stateMutability":"view"}
+                ],
+                signer
+            );
+
+            try {
+                await contract.flip(); // Call flip method
+                console.log("Flipper value flipped!");
+                await fetchFlipperValue(); // Refresh Flipper value
+            } catch (error) {
+                console.error("Error flipping value:", error);
+            }
         };
 
         fetchExtensions();
