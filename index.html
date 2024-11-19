@@ -10,11 +10,19 @@
 
     <script type="module">
         import * as utilLib from 'https://cdn.jsdelivr.net/npm/@reef-chain/util-lib@3.0.0/+esm';
-        
+
         const fetchExtensions = async()=>{
-            const extensions = await utilLib.extension.web3Enable('fetch-accounts-sample-app', undefined, true);
+            //intentional delay of 3 seconds- so as to give time to extension to inject
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+
+            let extensions = await utilLib.extension.web3Enable('fetch-accounts-sample-app', undefined, false);
 
             const extension = extensions.find((ext) => ext.name === "reef");
+
+            if(!extension){
+                alert("No Extensions Installed!");
+                return;
+            }
 
             const accounts = await extension.accounts.get();
             const accountsWithMeta = accounts.map(
