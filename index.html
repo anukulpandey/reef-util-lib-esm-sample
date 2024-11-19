@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial="initial-scale=1.0">
+    <title>Fetch Accounts from util-lib</title>
+</head>
+<body>
+    
+
+    <script type="module">
+        import * as utilLib from 'https://cdn.jsdelivr.net/npm/@reef-chain/util-lib@3.0.0/+esm';
+
+        const TEST_ACCOUNTS = [
+        {
+            address: "5GKKbUJx6DQ4rbTWavaNttanWAw86KrQeojgMNovy8m2QoXn",
+            name: "acc1",
+            meta: { source: "reef" },
+        },
+        {
+            address: "5EnY9eFwEDcEJ62dJWrTXhTucJ4pzGym4WZ2xcDKiT3eJecP",
+            name: "test-mobile",
+            meta: { source: "reef" },
+        },
+        {
+            address: "5G9f52Dx7bPPYqekh1beQsuvJkhePctWcZvPDDuhWSpDrojN",
+            name: "test1",
+            meta: { source: "reef" },
+        },
+        ];
+
+       console.log(utilLib)
+
+       utilLib.reefState.initReefState({
+        network:utilLib.network.AVAILABLE_NETWORKS.testnet,
+        jsonAccounts:{
+            accounts:TEST_ACCOUNTS,
+            injectedSigner:undefined
+        }
+       });
+
+       utilLib.reefState.accounts$.subscribe((val)=>console.log("val===",val))
+    </script>
+</body>
+</html>
